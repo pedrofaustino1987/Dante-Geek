@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mundial 2026 - Predicciones</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; padding: 20px; margin: 0; }
+        .container { max-width: 900px; margin: auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        h2 { text-align: center; color: #7f8c8d; font-size: 1.2em; margin-top: 0; }
+        
+        /* --- ESTILOS DE BUSQUEDA --- */
+        .controles { display: flex; justify-content: space-between; margin-bottom: 25px; gap: 20px; flex-wrap: wrap; }
+        .filtro-grupo { font-size: 1.1em; flex: 1; min-width: 200px; }
+        .filtro-grupo select { padding: 10px; font-size: 1em; border: 2px solid #2c3e50; border-radius: 5px; width: 100%; cursor: pointer; }
+        .buscador { font-size: 1.1em; flex: 2; min-width: 300px; display: flex; gap: 10px; }
+        .buscador input { padding: 10px; font-size: 1em; border: 2px solid #2c3e50; border-radius: 5px; flex: 1; }
+        .buscador button { padding: 10px 15px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-limpiar { background: #95a5a6 !important; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; display: none; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: center; }
+        th { background: #2c3e50; color: white; }
+        .mensaje-inicial { text-align: center; color: #7f8c8d; font-style: italic; padding: 20px; }
+
+        /* --- ESTILOS DE PREDICCIÓN --- */
+        .prediccion-section { margin-top: 40px; padding-top: 30px; border-top: 2px dashed #ccc; }
+        .predictor { display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .predictor select { padding: 15px; font-size: 1.2em; border: 2px solid #27ae60; border-radius: 8px; min-width: 200px; cursor: pointer; }
+        .predictor .vs-text { font-size: 2em; font-weight: bold; color: #e74c3c; }
+        .btn-predecir { padding: 15px 40px; font-size: 1.3em; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-predecir:hover { background: #219150; }
+        .btn-predecir:disabled { background: #95a5a6; cursor: not-allowed; }
+
+        /* Modal de Simulación */
+        #modal-simulacion { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; }
+        .modal-content { background: #1a1a2e; color: white; width: 60%; max-width: 600px; margin: 8% auto; padding: 30px; border-radius: 15px; text-align: center; position: relative; box-shadow: 0 0 20px rgba(233, 69, 96, 0.5); }
+        .tiempo { font-size: 2.5em; font-weight: bold; color: #e94560; margin-bottom: 10px; }
+        .minuto-partido { font-size: 1.5em; color: #f1c40f; margin-bottom: 20px; font-weight: bold; }
+        .equipos-sim { display: flex; justify-content: space-around; align-items: center; font-size: 1.8em; margin-bottom: 20px; font-weight: bold; }
+        .goles-sim { font-size: 3em; color: #0f3460; background: white; padding: 10px 25px; border-radius: 10px; min-width: 120px; }
+        .eventos { height: 150px; overflow-y: auto; background: #16213e; padding: 10px; text-align: left; margin-top: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9em; }
+        .cerrar-modal { position: absolute; top: 10px; right: 20px; font-size: 2em; cursor: pointer; color: white; }
+        .resultado-final { margin-top: 20px; font-size: 1.5em; color: #27ae60; font-weight: bold; background: #0f3460; padding: 15px; border-radius: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>⚽ Mundial 2026</h1>
+    <h2>Fase de Grupos y Predicciones</h2>
+
+    <!-- SECCIÓN DE BÚSQUEDA -->
+    <div class="controles">
+        <div class="filtro-grupo">
+            <label for="select-grupo"><strong>Filtrar por Grupo:</strong></label><br><br>
+            <select id="select-grupo" onchange="cargarPartidosGrupo(this.value)">
+                <option value="">-- Elige un Grupo --</option>
+            </select>
+        </div>
+        <div class="buscador">
+            <div style="width: 100%;">
+                <label><strong>Buscar Selección:</strong></label><br><br>
+                <div style="display: flex;">
+                    <input type="text" id="input-busqueda" placeholder="Ej: MEXICO, Brasil..." onkeypress="if(event.key==='Enter') buscarSeleccion()">
+                    <button onclick="buscarSeleccion()">Buscar</button>
+                    <button onclick="limpiarFiltros()" class="btn-limpiar">Limpiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <p id="mensaje-inicial" class="mensaje-inicial">Selecciona un grupo o busca una selección para ver sus partidos.</p>
+    <table id="tabla-partidos">
+        <thead><tr><th>Fecha</th><th>Hora</th><th>Local</th><th>Visitante</th><th>Estadio</th></tr></thead>
+        <tbody id="cuerpo-tabla"></tbody>
+    </table>
+
+    <!-- SECCIÓN DE PREDICCIÓN -->
+    <div class="prediccion-section">
+        <h2>Predice Dante</h2>
+        <p style="text-align: center;">Selecciona dos equipos y descubre quién ganará. El sistema tomará <strong>30 segundos</strong> para predecir.</p>
+        
+        <div class="predictor">
+            <select id="pred-local"><option value="">-- Local --</option></select>
+            <span class="vs-text">VS</span>
+            <select id="pred-visitante"><option value="">-- Visitante --</option></select>
+        </div>
+        <div style="text-align: center;">
+            <button class="btn-predecir" id="btn-predecir" onclick="iniciarPrediccion()"> PREDECIR PARTIDO</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL DE SIMULACIÓN -->
+<div id="modal-simulacion">
+    <div class="modal-content">
+        <span class="cerrar-modal" onclick="cerrarModal()">&times;</span>
+        <h2>⚡ Predicción en Vivo</h2>
+        <div class="tiempo" id="minuto-sim">00:30</div>
+        <div class="minuto-partido" id="minuto-partido-sim">Minuto del partido: 0'</div>
+        <div class="equipos-sim">
+            <span id="local-sim"></span>
+            <div class="goles-sim"><span id="gol-local-sim">0</span> - <span id="gol-visit-sim">0</span></div>
+            <span id="visit-sim"></span>
+        </div>
+        <div class="eventos" id="eventos-sim"></div>
+        <div class="resultado-final" id="resultado-final"></div>
+    </div>
+</div>
+
+<script>
+    const SUPABASE_URL = 'https://kdnoamntmwdmeferbkql.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtkbm9hbW50bXdkbWVmZXJia3FsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMDg4NTIsImV4cCI6MjA5Njg4NDg1Mn0.Ogs1uZCFGwLRdfcjwq8frnuQZrwlb_8j_XoWwNF6AcQ'; 
+    const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let intervalo = null;
+    let tiempoRestante = 30;
+
+    // ==========================================
+    // CARGA INICIAL DE DATOS
+    // ==========================================
+    async function cargarDatosIniciales() {
+        const { data: grupos } = await _supabase.from('grupos').select('*').order('id');
+        const selectGrupo = document.getElementById('select-grupo');
+        grupos.forEach(g => { selectGrupo.innerHTML += `<option value="${g.id}">Grupo ${g.nombre}</option>`; });
+
+        const { data: selecciones } = await _supabase.from('selecciones').select('*').order('nombre');
+        const selectLocal = document.getElementById('pred-local');
+        const selectVisit = document.getElementById('pred-visitante');
+        selecciones.forEach(s => {
+            selectLocal.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
+            selectVisit.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
+        });
+    }
+
+    function renderPartidos(partidos) {
+        const tabla = document.getElementById('tabla-partidos');
+        const tbody = document.getElementById('cuerpo-tabla');
+        document.getElementById('mensaje-inicial').style.display = 'none';
+        tabla.style.display = 'table';
+        tbody.innerHTML = '';
+        if (partidos.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No se encontraron partidos.</td></tr>'; return; }
+        partidos.forEach(p => {
+            const f = p.fecha ? new Date(p.fecha.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) : 'Sin fecha';
+            const h = p.horario ? p.horario.hora.substring(0, 5) : 'Sin hora';
+            tbody.innerHTML += `<tr><td>${f}</td><td>${h}</td><td>${p.local.nombre}</td><td>${p.visitante.nombre}</td><td>${p.sede.nombre}</td></tr>`;
+        });
+    }
+
+    async function cargarPartidosGrupo(idGrupo) {
+        document.getElementById('input-busqueda').value = '';
+        if (!idGrupo) { document.getElementById('tabla-partidos').style.display = 'none'; document.getElementById('mensaje-inicial').style.display = 'block'; return; }
+        const { data, error } = await _supabase.from('partidos').select(`id, local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).eq('grupo_id', idGrupo);
+        if (!error) renderPartidos(data);
+    }
+
+    async function buscarSeleccion() {
+        const searchTerm = document.getElementById('input-busqueda').value.trim();
+        if (!searchTerm) return;
+        document.getElementById('select-grupo').value = "";
+        const { data: equipos } = await _supabase.from('selecciones').select('id').ilike('nombre', `%${searchTerm}%`);
+        if (equipos.length === 0) { renderPartidos([]); return; }
+        const ids = equipos.map(e => e.id);
+        const { data, error } = await _supabase.from('partidos').select(`id, local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).or(`seleccion_local_id.in.(${ids.join(',')}),seleccion_visitante_id.in.(${ids.join(',')})`);
+        if (!error) renderPartidos(data);
+    }
+
+    function limpiarFiltros() {
+        document.getElementById('input-busqueda').value = '';
+        document.getElementById('select-grupo').value = '';
+        document.getElementById('tabla-partidos').style.display = 'none';
+        document.getElementById('mensaje-inicial').style.display = 'block';
+    }
+
+    // ==========================================
+    // LÓGICA DE PREDICCIÓN (30 SEGUNDOS)
+    // ==========================================
+    function iniciarPrediccion() {
+        const selectLocal = document.getElementById('pred-local');
+        const selectVisit = document.getElementById('pred-visitante');
+        
+        const idLocal = selectLocal.value;
+        const idVisit = selectVisit.value;
+        
+        if (!idLocal || !idVisit) { alert("Por favor selecciona dos equipos para predecir."); return; }
+        if (idLocal === idVisit) { alert("No puedes predecir un equipo contra sí mismo."); return; }
+
+        const nombreLocal = selectLocal.options[selectLocal.selectedIndex].text;
+        const nombreVisit = selectVisit.options[selectVisit.selectedIndex].text;
+
+        // Preparar Modal
+        document.getElementById('local-sim').innerText = nombreLocal;
+        document.getElementById('visit-sim').innerText = nombreVisit;
+        document.getElementById('gol-local-sim').innerText = '0';
+        document.getElementById('gol-visit-sim').innerText = '0';
+        document.getElementById('eventos-sim').innerHTML = '<p>⏳ Inicio del partido...</p>';
+        document.getElementById('resultado-final').style.display = 'none';
+        document.getElementById('btn-predecir').disabled = true;
+        document.getElementById('minuto-partido-sim').innerText = "Minuto del partido: 0'";
+        
+        tiempoRestante = 30;
+        document.getElementById('minuto-sim').innerText = "00:30";
+        document.getElementById('modal-simulacion').style.display = 'block';
+
+        // Lógica del sistema: Cantidad aleatoria de goles (0 a 5)
+        const totalGoles = Math.floor(Math.random() * 6);
+        let tiemposDeGoles = [];
+        for (let i = 0; i < totalGoles; i++) {
+            tiemposDeGoles.push(Math.floor(Math.random() * 29) + 1); // Segundos del 1 al 29
+        }
+
+        let golesL = 0;
+        let golesV = 0;
+
+        intervalo = setInterval(() => {
+            tiempoRestante--;
+            let secs = tiempoRestante < 10 ? '0' + tiempoRestante : tiempoRestante;
+            document.getElementById('minuto-sim').innerText = `00:${secs}`;
+
+            // Calcular minuto del partido (30 segs reales = 90 mins partido)
+            let segundoTranscurrido = 30 - tiempoRestante;
+            let minutoPartido = Math.ceil((segundoTranscurrido / 30) * 90);
+            if (minutoPartido === 0) minutoPartido = 1;
+            
+            document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: ${minutoPartido}'`;
+
+            // Aviso de Medio Tiempo (Segundo 15 = Minuto 45)
+            if (tiempoRestante === 15) {
+                document.getElementById('eventos-sim').innerHTML += `<p style="color: #f1c40f; font-weight: bold;">⏱️ --- FIN DEL PRIMER TIEMPO ---</p>`;
+            }
+
+            // Comprobar si hay gol en este segundo
+            while (tiemposDeGoles.includes(tiempoRestante)) {
+                tiemposDeGoles.splice(tiemposDeGoles.indexOf(tiempoRestante), 1);
+                
+                // 50% probabilidad para cada equipo
+                let esLocal = Math.random() < 0.5;
+                let equipoGol = "";
+                if (esLocal) {
+                    golesL++;
+                    document.getElementById('gol-local-sim').innerText = golesL;
+                    equipoGol = nombreLocal;
+                } else {
+                    golesV++;
+                    document.getElementById('gol-visit-sim').innerText = golesV;
+                    equipoGol = nombreVisit;
+                }
+
+                // Determinar si es Primer o Segundo Tiempo
+                let tiempoDelGol = minutoPartido <= 45 ? "Primer Tiempo" : "Segundo Tiempo";
+                // Ajuste estético para el minuto 45 o 90+
+                if(minutoPartido === 45) tiempoDelGol = "Final Primer Tiempo";
+                if(minutoPartido > 90) tiempoDelGol = "Tiempo Añadido";
+
+                document.getElementById('eventos-sim').innerHTML += `<p>⚽ ¡GOL! de ${equipoGol} al minuto ${minutoPartido}' (${tiempoDelGol})</p>`;
+                let evDiv = document.getElementById('eventos-sim');
+                evDiv.scrollTop = evDiv.scrollHeight;
+            }
+
+            // Fin de la predicción (30 segundos)
+            if (tiempoRestante <= 0) {
+                clearInterval(intervalo);
+                document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: 90' (FINAL)`;
+                
+                let mensaje = "";
+                if (golesL > golesV) {
+                    mensaje = `🏆 ¡GANA ${nombreLocal}! (${golesL} - ${golesV})`;
+                } else if (golesV > golesL) {
+                    mensaje = `🏆 ¡GANA ${nombreVisit}! (${golesL} - ${golesV})`;
+                } else {
+                    mensaje = `🤝 ¡EMPATE! (${golesL} - ${golesV})`;
+                }
+
+                document.getElementById('resultado-final').innerText = mensaje;
+                document.getElementById('resultado-final').style.display = 'block';
+                document.getElementById('btn-predecir').disabled = false;
+            }
+        }, 1000);
+    }
+
+    function cerrarModal() {
+        document.getElementById('modal-simulacion').style.display = 'none';
+        if (tiempoRestante > 0 && tiempoRestante < 30) {
+            clearInterval(intervalo);
+            document.getElementById('btn-predecir').disabled = false;
+        }
+    }
+
+    window.onload = cargarDatosIniciales;
+</script>
+</body>
+</html>
