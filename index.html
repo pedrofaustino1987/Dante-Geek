@@ -34,6 +34,9 @@
         .btn-predecir:hover { background: #219150; }
         .btn-predecir:disabled { background: #95a5a6; cursor: not-allowed; }
 
+        /* Estilo para las opciones inhabilitadas en el combobox */
+        select option:disabled { color: #aaa; background-color: #f0f0f0; }
+
         /* Modal de Simulación */
         #modal-simulacion { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; }
         .modal-content { background: #1a1a2e; color: white; width: 60%; max-width: 600px; margin: 8% auto; padding: 30px; border-radius: 15px; text-align: center; position: relative; box-shadow: 0 0 20px rgba(233, 69, 96, 0.5); }
@@ -84,9 +87,10 @@
         <p style="text-align: center;">Selecciona dos equipos y descubre quién ganará. El sistema tomará <strong>30 segundos</strong> para predecir.</p>
         
         <div class="predictor">
-            <select id="pred-local"><option value="">-- Local --</option></select>
+            <!-- Se agregó onchange="actualizarOpciones()" -->
+            <select id="pred-local" onchange="actualizarOpciones()"><option value="">-- Local --</option></select>
             <span class="vs-text">VS</span>
-            <select id="pred-visitante"><option value="">-- Visitante --</option></select>
+            <select id="pred-visitante" onchange="actualizarOpciones()"><option value="">-- Visitante --</option></select>
         </div>
         <div style="text-align: center;">
             <button class="btn-predecir" id="btn-predecir" onclick="iniciarPrediccion()"> PREDECIR PARTIDO</button>
@@ -134,6 +138,33 @@
             selectLocal.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
             selectVisit.innerHTML += `<option value="${s.id}" data-nombre="${s.nombre}">${s.nombre}</option>`;
         });
+    }
+
+    // ==========================================
+    // LÓGICA DE COMBOBOX INHABILITADO
+    // ==========================================
+    function actualizarOpciones() {
+        const selectLocal = document.getElementById('pred-local');
+        const selectVisit = document.getElementById('pred-visitante');
+        
+        const valLocal = selectLocal.value;
+        const valVisit = selectVisit.value;
+
+        // 1. Habilitar todas las opciones en ambos comboboxes primero
+        Array.from(selectLocal.options).forEach(opt => opt.disabled = false);
+        Array.from(selectVisit.options).forEach(opt => opt.disabled = false);
+
+        // 2. Si hay un equipo seleccionado en Local, deshabilitarlo en Visitante
+        if (valLocal) {
+            const optToDisable = selectVisit.querySelector(`option[value="${valLocal}"]`);
+            if (optToDisable) optToDisable.disabled = true;
+        }
+
+        // 3. Si hay un equipo seleccionado en Visitante, deshabilitarlo en Local
+        if (valVisit) {
+            const optToDisable = selectLocal.querySelector(`option[value="${valVisit}"]`);
+            if (optToDisable) optToDisable.disabled = true;
+        }
     }
 
     function renderPartidos(partidos) {
@@ -186,6 +217,7 @@
         const idVisit = selectVisit.value;
         
         if (!idLocal || !idVisit) { alert("Por favor selecciona dos equipos para predecir."); return; }
+        // Ya no es estrictamente necesario por la inhabilitación, pero no hace daño dejarlo
         if (idLocal === idVisit) { alert("No puedes predecir un equipo contra sí mismo."); return; }
 
         const nombreLocal = selectLocal.options[selectLocal.selectedIndex].text;
@@ -209,7 +241,7 @@
         const totalGoles = Math.floor(Math.random() * 6);
         let tiemposDeGoles = [];
         for (let i = 0; i < totalGoles; i++) {
-            tiemposDeGoles.push(Math.floor(Math.random() * 29) + 1); // Segundos del 1 al 29
+            tiemposDeGoles.push(Math.floor(Math.random() * 29) + 1);
         }
 
         let golesL = 0;
@@ -220,23 +252,19 @@
             let secs = tiempoRestante < 10 ? '0' + tiempoRestante : tiempoRestante;
             document.getElementById('minuto-sim').innerText = `00:${secs}`;
 
-            // Calcular minuto del partido (30 segs reales = 90 mins partido)
             let segundoTranscurrido = 30 - tiempoRestante;
             let minutoPartido = Math.ceil((segundoTranscurrido / 30) * 90);
             if (minutoPartido === 0) minutoPartido = 1;
             
             document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: ${minutoPartido}'`;
 
-            // Aviso de Medio Tiempo (Segundo 15 = Minuto 45)
             if (tiempoRestante === 15) {
                 document.getElementById('eventos-sim').innerHTML += `<p style="color: #f1c40f; font-weight: bold;">⏱️ --- FIN DEL PRIMER TIEMPO ---</p>`;
             }
 
-            // Comprobar si hay gol en este segundo
             while (tiemposDeGoles.includes(tiempoRestante)) {
                 tiemposDeGoles.splice(tiemposDeGoles.indexOf(tiempoRestante), 1);
                 
-                // 50% probabilidad para cada equipo
                 let esLocal = Math.random() < 0.5;
                 let equipoGol = "";
                 if (esLocal) {
@@ -249,9 +277,7 @@
                     equipoGol = nombreVisit;
                 }
 
-                // Determinar si es Primer o Segundo Tiempo
                 let tiempoDelGol = minutoPartido <= 45 ? "Primer Tiempo" : "Segundo Tiempo";
-                // Ajuste estético para el minuto 45 o 90+
                 if(minutoPartido === 45) tiempoDelGol = "Final Primer Tiempo";
                 if(minutoPartido > 90) tiempoDelGol = "Tiempo Añadido";
 
@@ -260,7 +286,6 @@
                 evDiv.scrollTop = evDiv.scrollHeight;
             }
 
-            // Fin de la predicción (30 segundos)
             if (tiempoRestante <= 0) {
                 clearInterval(intervalo);
                 document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: 90' (FINAL)`;
