@@ -33,8 +33,6 @@
         .btn-predecir { padding: 15px 40px; font-size: 1.3em; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-predecir:hover { background: #219150; }
         .btn-predecir:disabled { background: #95a5a6; cursor: not-allowed; }
-
-        /* Estilo para las opciones inhabilitadas en el combobox */
         select option:disabled { color: #aaa; background-color: #f0f0f0; }
 
         /* Modal de Simulación */
@@ -44,7 +42,7 @@
         .minuto-partido { font-size: 1.5em; color: #f1c40f; margin-bottom: 20px; font-weight: bold; }
         .equipos-sim { display: flex; justify-content: space-around; align-items: center; font-size: 1.8em; margin-bottom: 20px; font-weight: bold; }
         .goles-sim { font-size: 3em; color: #0f3460; background: white; padding: 10px 25px; border-radius: 10px; min-width: 120px; }
-        .eventos { height: 150px; overflow-y: auto; background: #16213e; padding: 10px; text-align: left; margin-top: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9em; }
+        .eventos { height: 180px; overflow-y: auto; background: #16213e; padding: 10px; text-align: left; margin-top: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9em; }
         .cerrar-modal { position: absolute; top: 10px; right: 20px; font-size: 2em; cursor: pointer; color: white; }
         .resultado-final { margin-top: 20px; font-size: 1.5em; color: #27ae60; font-weight: bold; background: #0f3460; padding: 15px; border-radius: 10px; display: none; }
     </style>
@@ -87,7 +85,6 @@
         <p style="text-align: center;">Selecciona dos equipos y descubre quién ganará. El sistema tomará <strong>30 segundos</strong> para predecir.</p>
         
         <div class="predictor">
-            <!-- Se agregó onchange="actualizarOpciones()" -->
             <select id="pred-local" onchange="actualizarOpciones()"><option value="">-- Local --</option></select>
             <span class="vs-text">VS</span>
             <select id="pred-visitante" onchange="actualizarOpciones()"><option value="">-- Visitante --</option></select>
@@ -123,6 +120,10 @@
     let intervalo = null;
     let tiempoRestante = 30;
 
+    // Variables globales para guardar los jugadores durante la predicción
+    let jugadoresLocal = [];
+    let jugadoresVisitante = [];
+
     // ==========================================
     // CARGA INICIAL DE DATOS
     // ==========================================
@@ -140,31 +141,15 @@
         });
     }
 
-    // ==========================================
-    // LÓGICA DE COMBOBOX INHABILITADO
-    // ==========================================
     function actualizarOpciones() {
         const selectLocal = document.getElementById('pred-local');
         const selectVisit = document.getElementById('pred-visitante');
-        
         const valLocal = selectLocal.value;
         const valVisit = selectVisit.value;
-
-        // 1. Habilitar todas las opciones en ambos comboboxes primero
         Array.from(selectLocal.options).forEach(opt => opt.disabled = false);
         Array.from(selectVisit.options).forEach(opt => opt.disabled = false);
-
-        // 2. Si hay un equipo seleccionado en Local, deshabilitarlo en Visitante
-        if (valLocal) {
-            const optToDisable = selectVisit.querySelector(`option[value="${valLocal}"]`);
-            if (optToDisable) optToDisable.disabled = true;
-        }
-
-        // 3. Si hay un equipo seleccionado en Visitante, deshabilitarlo en Local
-        if (valVisit) {
-            const optToDisable = selectLocal.querySelector(`option[value="${valVisit}"]`);
-            if (optToDisable) optToDisable.disabled = true;
-        }
+        if (valLocal) { const opt = selectVisit.querySelector(`option[value="${valLocal}"]`); if (opt) opt.disabled = true; }
+        if (valVisit) { const opt = selectLocal.querySelector(`option[value="${valVisit}"]`); if (opt) opt.disabled = true; }
     }
 
     function renderPartidos(partidos) {
@@ -207,9 +192,9 @@
     }
 
     // ==========================================
-    // LÓGICA DE PREDICCIÓN (30 SEGUNDOS)
+    // LÓGICA DE PREDICCIÓN (30 SEGUNDOS + JUGADORES)
     // ==========================================
-    function iniciarPrediccion() {
+    async function iniciarPrediccion() {
         const selectLocal = document.getElementById('pred-local');
         const selectVisit = document.getElementById('pred-visitante');
         
@@ -217,11 +202,27 @@
         const idVisit = selectVisit.value;
         
         if (!idLocal || !idVisit) { alert("Por favor selecciona dos equipos para predecir."); return; }
-        // Ya no es estrictamente necesario por la inhabilitación, pero no hace daño dejarlo
-        if (idLocal === idVisit) { alert("No puedes predecir un equipo contra sí mismo."); return; }
 
         const nombreLocal = selectLocal.options[selectLocal.selectedIndex].text;
         const nombreVisit = selectVisit.options[selectVisit.selectedIndex].text;
+
+        // Deshabilitar botón inmediatamente
+        document.getElementById('btn-predecir').disabled = true;
+
+        // ==========================================
+        // CONSULTAR JUGADORES A LA BASE DE DATOS
+        // ==========================================
+        const { data: dataJugLocal, error: errL } = await _supabase.from('jugadores').select('nombre').eq('seleccion_id', idLocal);
+        const { data: dataJugVisit, error: errV } = await _supabase.from('jugadores').select('nombre').eq('seleccion_id', idVisit);
+
+        if (errL || errV || !dataJugLocal.length || !dataJugVisit.length) {
+            alert("Error: No se encontraron jugadores para uno o ambos equipos en la base de datos.");
+            document.getElementById('btn-predecir').disabled = false;
+            return;
+        }
+
+        jugadoresLocal = dataJugLocal.map(j => j.nombre);
+        jugadoresVisitante = dataJugVisit.map(j => j.nombre);
 
         // Preparar Modal
         document.getElementById('local-sim').innerText = nombreLocal;
@@ -230,7 +231,6 @@
         document.getElementById('gol-visit-sim').innerText = '0';
         document.getElementById('eventos-sim').innerHTML = '<p>⏳ Inicio del partido...</p>';
         document.getElementById('resultado-final').style.display = 'none';
-        document.getElementById('btn-predecir').disabled = true;
         document.getElementById('minuto-partido-sim').innerText = "Minuto del partido: 0'";
         
         tiempoRestante = 30;
@@ -262,30 +262,39 @@
                 document.getElementById('eventos-sim').innerHTML += `<p style="color: #f1c40f; font-weight: bold;">⏱️ --- FIN DEL PRIMER TIEMPO ---</p>`;
             }
 
+            // Comprobar si hay gol en este segundo
             while (tiemposDeGoles.includes(tiempoRestante)) {
                 tiemposDeGoles.splice(tiemposDeGoles.indexOf(tiempoRestante), 1);
                 
                 let esLocal = Math.random() < 0.5;
                 let equipoGol = "";
+                let jugadorGol = "";
+                
                 if (esLocal) {
                     golesL++;
                     document.getElementById('gol-local-sim').innerText = golesL;
                     equipoGol = nombreLocal;
+                    // Seleccionar un jugador aleatorio del equipo local
+                    jugadorGol = jugadoresLocal[Math.floor(Math.random() * jugadoresLocal.length)];
                 } else {
                     golesV++;
                     document.getElementById('gol-visit-sim').innerText = golesV;
                     equipoGol = nombreVisit;
+                    // Seleccionar un jugador aleatorio del equipo visitante
+                    jugadorGol = jugadoresVisitante[Math.floor(Math.random() * jugadoresVisitante.length)];
                 }
 
                 let tiempoDelGol = minutoPartido <= 45 ? "Primer Tiempo" : "Segundo Tiempo";
                 if(minutoPartido === 45) tiempoDelGol = "Final Primer Tiempo";
                 if(minutoPartido > 90) tiempoDelGol = "Tiempo Añadido";
 
-                document.getElementById('eventos-sim').innerHTML += `<p>⚽ ¡GOL! de ${equipoGol} al minuto ${minutoPartido}' (${tiempoDelGol})</p>`;
+                // Mostrar el gol con el NOMBRE DEL JUGADOR
+                document.getElementById('eventos-sim').innerHTML += `<p>⚽ ¡GOL! de <strong>${equipoGol}</strong> al minuto ${minutoPartido}' (${tiempoDelGol}) <br>👉 Anotación de: <span style="color:#3498db; font-weight:bold;">${jugadorGol}</span></p>`;
                 let evDiv = document.getElementById('eventos-sim');
                 evDiv.scrollTop = evDiv.scrollHeight;
             }
 
+            // Fin de la predicción (30 segundos)
             if (tiempoRestante <= 0) {
                 clearInterval(intervalo);
                 document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: 90' (FINAL)`;
