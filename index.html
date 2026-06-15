@@ -32,6 +32,10 @@
         .predictor { display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
         .predictor select { padding: 15px; font-size: 1.2em; border: 2px solid #27ae60; border-radius: 8px; min-width: 200px; cursor: pointer; }
         .predictor .vs-text { font-size: 2em; font-weight: bold; color: #e74c3c; }
+        
+        .prediccion-usuario { text-align: center; margin-bottom: 20px; }
+        .prediccion-usuario select { padding: 15px; font-size: 1.2em; border: 2px solid #8e44ad; border-radius: 8px; min-width: 250px; cursor: pointer; color: #8e44ad; font-weight: bold; }
+        
         .btn-predecir { padding: 15px 40px; font-size: 1.3em; background: #27ae60; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; transition: 0.3s; }
         .btn-predecir:hover { background: #219150; }
         .btn-predecir:disabled { background: #95a5a6; cursor: not-allowed; }
@@ -85,10 +89,10 @@
             <tr>
                 <th>Fecha</th>
                 <th>Hora</th>
+                <th>Grupo</th>
                 <th>Local</th>
                 <th>Visitante</th>
                 <th>Estadio</th>
-                <th>Grupo</th>
             </tr>
         </thead>
         <tbody id="cuerpo-tabla"></tbody>
@@ -97,13 +101,24 @@
     <!-- SECCIÓN DE PREDICCIÓN -->
     <div class="prediccion-section">
         <h2>Predice Dante</h2>
-        <p style="text-align: center;">Selecciona dos equipos y descubre quién ganará. El sistema tomará <strong>30 segundos</strong> para predecir.</p>
+        <p style="text-align: center;">Selecciona los equipos, elige quién ganará y comprueba si aciertas. <strong>30 segundos</strong> de simulación.</p>
         
         <div class="predictor">
             <select id="pred-local" onchange="actualizarOpciones()"><option value="">-- Local --</option></select>
             <span class="vs-text">VS</span>
             <select id="pred-visitante" onchange="actualizarOpciones()"><option value="">-- Visitante --</option></select>
         </div>
+
+        <div class="prediccion-usuario">
+            <label><strong>¿Quién ganará?</strong></label><br><br>
+            <select id="pred-usuario">
+                <option value="">-- Selecciona tu pronóstico --</option>
+                <option value="local">Gana Local</option>
+                <option value="empate">Empate</option>
+                <option value="visitante">Gana Visitante</option>
+            </select>
+        </div>
+
         <div style="text-align: center;">
             <button class="btn-predecir" id="btn-predecir" onclick="iniciarPrediccion()"> PREDECIR PARTIDO</button>
         </div>
@@ -157,12 +172,24 @@
     function actualizarOpciones() {
         const selectLocal = document.getElementById('pred-local');
         const selectVisit = document.getElementById('pred-visitante');
+        const predUsuario = document.getElementById('pred-usuario');
+        
         const valLocal = selectLocal.value;
         const valVisit = selectVisit.value;
+
+        // Inhabilitar en el otro combobox
         Array.from(selectLocal.options).forEach(opt => opt.disabled = false);
         Array.from(selectVisit.options).forEach(opt => opt.disabled = false);
         if (valLocal) { const opt = selectVisit.querySelector(`option[value="${valLocal}"]`); if (opt) opt.disabled = true; }
         if (valVisit) { const opt = selectLocal.querySelector(`option[value="${valVisit}"]`); if (opt) opt.disabled = true; }
+
+        // Actualizar texto del pronóstico del usuario con los nombres
+        const nombreLocal = valLocal ? selectLocal.options[selectLocal.selectedIndex].text : "Local";
+        const nombreVisit = valVisit ? selectVisit.options[selectVisit.selectedIndex].text : "Visitante";
+        
+        predUsuario.options[1].text = `Gana ${nombreLocal}`;
+        predUsuario.options[2].text = `Empate`;
+        predUsuario.options[3].text = `Gana ${nombreVisit}`;
     }
 
     function renderPartidos(partidos) {
@@ -193,39 +220,23 @@
     async function cargarPartidosFecha(fechaSeleccionada) {
         document.getElementById('input-busqueda').value = '';
         document.getElementById('select-grupo').value = '';
-        
         if (!fechaSeleccionada) { document.getElementById('tabla-partidos').style.display = 'none'; document.getElementById('mensaje-inicial').style.display = 'block'; return; }
-
         const tbody = document.getElementById('cuerpo-tabla');
         tbody.innerHTML = '<tr><td colspan="6">Buscando partidos en la fecha...</td></tr>';
-
         try {
             const { data: fechaData, error: errFecha } = await _supabase.from('fechas').select('id').eq('fecha', fechaSeleccionada).single();
-            
-            if (errFecha || !fechaData) {
-                renderPartidos([]);
-                return;
-            }
-
-            const { data: partidos, error } = await _supabase.from('partidos').select(`
-                id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
-            `).eq('fecha_id', fechaData.id);
-
+            if (errFecha || !fechaData) { renderPartidos([]); return; }
+            const { data: partidos, error } = await _supabase.from('partidos').select(`id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).eq('fecha_id', fechaData.id);
             if (error) throw error;
             renderPartidos(partidos);
-        } catch (error) {
-            console.error('Error al buscar por fecha:', error);
-            tbody.innerHTML = `<tr><td colspan="6" style="color:red;">Error al cargar.</td></tr>`;
-        }
+        } catch (error) { tbody.innerHTML = `<tr><td colspan="6" style="color:red;">Error al cargar.</td></tr>`; }
     }
 
     async function cargarPartidosGrupo(idGrupo) {
         document.getElementById('input-busqueda').value = '';
         document.getElementById('input-fecha').value = '';
         if (!idGrupo) { document.getElementById('tabla-partidos').style.display = 'none'; document.getElementById('mensaje-inicial').style.display = 'block'; return; }
-        const { data, error } = await _supabase.from('partidos').select(`
-            id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
-        `).eq('grupo_id', idGrupo);
+        const { data, error } = await _supabase.from('partidos').select(`id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).eq('grupo_id', idGrupo);
         if (!error) renderPartidos(data);
     }
 
@@ -237,9 +248,7 @@
         const { data: equipos } = await _supabase.from('selecciones').select('id').ilike('nombre', `%${searchTerm}%`);
         if (equipos.length === 0) { renderPartidos([]); return; }
         const ids = equipos.map(e => e.id);
-        const { data, error } = await _supabase.from('partidos').select(`
-            id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
-        `).or(`seleccion_local_id.in.(${ids.join(',')}),seleccion_visitante_id.in.(${ids.join(',')})`);
+        const { data, error } = await _supabase.from('partidos').select(`id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).or(`seleccion_local_id.in.(${ids.join(',')}),seleccion_visitante_id.in.(${ids.join(',')})`);
         if (!error) renderPartidos(data);
     }
 
@@ -261,6 +270,9 @@
         const idVisit = selectVisit.value;
         
         if (!idLocal || !idVisit) { alert("Por favor selecciona dos equipos para predecir."); return; }
+
+        const prediccionUsuario = document.getElementById('pred-usuario').value;
+        if (!prediccionUsuario) { alert("Por favor indica tu pronóstico: ¿Quién ganará?"); return; }
 
         const nombreLocal = selectLocal.options[selectLocal.selectedIndex].text;
         const nombreVisit = selectVisit.options[selectVisit.selectedIndex].text;
@@ -346,13 +358,27 @@
                 clearInterval(intervalo);
                 document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: 90' (FINAL)`;
                 
+                // Determinar resultado real
+                let resultadoReal = "";
+                if (golesL > golesV) resultadoReal = "local";
+                else if (golesV > golesL) resultadoReal = "visitante";
+                else resultadoReal = "empate";
+
+                // Comparar con el usuario
+                let msgUsuario = "";
+                if (prediccionUsuario === resultadoReal) {
+                    msgUsuario = "🎉 ¡ACERTASTE! ";
+                } else {
+                    msgUsuario = "😢 Fallaste. ";
+                }
+
                 let mensaje = "";
                 if (golesL > golesV) {
-                    mensaje = `🏆 ¡GANA ${nombreLocal}! (${golesL} - ${golesV})`;
+                    mensaje = `${msgUsuario}🏆 ¡GANA ${nombreLocal}! (${golesL} - ${golesV})`;
                 } else if (golesV > golesL) {
-                    mensaje = `🏆 ¡GANA ${nombreVisit}! (${golesL} - ${golesV})`;
+                    mensaje = `${msgUsuario}🏆 ¡GANA ${nombreVisit}! (${golesL} - ${golesV})`;
                 } else {
-                    mensaje = `🤝 ¡EMPATE! (${golesL} - ${golesV})`;
+                    mensaje = `${msgUsuario}🤝 ¡EMPATE! (${golesL} - ${golesV})`;
                 }
 
                 document.getElementById('resultado-final').innerText = mensaje;
