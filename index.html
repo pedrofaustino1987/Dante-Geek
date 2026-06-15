@@ -2,7 +2,6 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- Favicon con el logo del Mundial 2026 -->
     <link rel="icon" type="image/png" href="https://z-cdn-media.chatglm.cn/files/38954614-5fa8-4743-a226-636d7dd6d9a4.png?auth_key=1881490014-30685708d7b641eba4be25a921f769b2-0-948a482e4f9171c7e9962ddfaa94f6ab">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mundial 2026 - Predicciones</title>
@@ -41,14 +40,39 @@
         .btn-predecir:disabled { background: #95a5a6; cursor: not-allowed; }
         select option:disabled { color: #aaa; background-color: #f0f0f0; }
 
-        /* Modal de Simulación */
-        #modal-simulacion { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1000; }
-        .modal-content { background: #1a1a2e; color: white; width: 60%; max-width: 600px; margin: 8% auto; padding: 30px; border-radius: 15px; text-align: center; position: relative; box-shadow: 0 0 20px rgba(233, 69, 96, 0.5); }
+        /* --- MODAL DE SIMULACIÓN (CENTRADO PERFECTO) --- */
+        #modal-simulacion { 
+            display: none; 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            background: rgba(0,0,0,0.85); 
+            z-index: 1000;
+            overflow-y: auto; /* Permite scroll si la pantalla es muy pequeña */
+        }
+        .modal-content { 
+            background: #1a1a2e; 
+            color: white; 
+            width: 90%; 
+            max-width: 600px; 
+            padding: 30px; 
+            border-radius: 15px; 
+            text-align: center; 
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%); /* Centrado exacto */
+            box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+            max-height: 90vh; /* No ocupa más del 90% de la altura de la pantalla */
+            overflow-y: auto; /* Scroll interno si el contenido es largo */
+        }
         .tiempo { font-size: 2.5em; font-weight: bold; color: #e94560; margin-bottom: 10px; }
         .minuto-partido { font-size: 1.5em; color: #f1c40f; margin-bottom: 20px; font-weight: bold; }
         .equipos-sim { display: flex; justify-content: space-around; align-items: center; font-size: 1.8em; margin-bottom: 20px; font-weight: bold; }
         .goles-sim { font-size: 3em; color: #0f3460; background: white; padding: 10px 25px; border-radius: 10px; min-width: 120px; }
-        .eventos { height: 180px; overflow-y: auto; background: #16213e; padding: 10px; text-align: left; margin-top: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9em; }
+        .eventos { height: 150px; overflow-y: auto; background: #16213e; padding: 10px; text-align: left; margin-top: 20px; border-radius: 5px; font-family: monospace; font-size: 0.9em; }
         .cerrar-modal { position: absolute; top: 10px; right: 20px; font-size: 2em; cursor: pointer; color: white; }
         .resultado-final { margin-top: 20px; font-size: 1.5em; color: #27ae60; font-weight: bold; background: #0f3460; padding: 15px; border-radius: 10px; display: none; }
     </style>
@@ -177,13 +201,11 @@
         const valLocal = selectLocal.value;
         const valVisit = selectVisit.value;
 
-        // Inhabilitar en el otro combobox
         Array.from(selectLocal.options).forEach(opt => opt.disabled = false);
         Array.from(selectVisit.options).forEach(opt => opt.disabled = false);
         if (valLocal) { const opt = selectVisit.querySelector(`option[value="${valLocal}"]`); if (opt) opt.disabled = true; }
         if (valVisit) { const opt = selectLocal.querySelector(`option[value="${valVisit}"]`); if (opt) opt.disabled = true; }
 
-        // Actualizar texto del pronóstico del usuario con los nombres
         const nombreLocal = valLocal ? selectLocal.options[selectLocal.selectedIndex].text : "Local";
         const nombreVisit = valVisit ? selectVisit.options[selectVisit.selectedIndex].text : "Visitante";
         
@@ -358,13 +380,11 @@
                 clearInterval(intervalo);
                 document.getElementById('minuto-partido-sim').innerText = `Minuto del partido: 90' (FINAL)`;
                 
-                // Determinar resultado real
                 let resultadoReal = "";
                 if (golesL > golesV) resultadoReal = "local";
                 else if (golesV > golesL) resultadoReal = "visitante";
                 else resultadoReal = "empate";
 
-                // Comparar con el usuario
                 let msgUsuario = "";
                 if (prediccionUsuario === resultadoReal) {
                     msgUsuario = "🎉 ¡ACERTASTE! ";
@@ -383,6 +403,10 @@
 
                 document.getElementById('resultado-final').innerText = mensaje;
                 document.getElementById('resultado-final').style.display = 'block';
+                
+                // Hacer scroll automático hacia el resultado final para que se vea siempre
+                document.getElementById('resultado-final').scrollIntoView({ behavior: 'smooth', block: 'center' });
+
                 document.getElementById('btn-predecir').disabled = false;
             }
         }, 1000);
