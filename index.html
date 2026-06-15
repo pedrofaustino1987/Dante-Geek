@@ -79,7 +79,16 @@
 
     <p id="mensaje-inicial" class="mensaje-inicial">Busca por fecha, selecciona un grupo o busca una selección para ver sus partidos.</p>
     <table id="tabla-partidos">
-        <thead><tr><th>Fecha</th><th>Hora</th><th>Local</th><th>Visitante</th><th>Estadio</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Grupo</th>
+                <th>Local</th>
+                <th>Visitante</th>
+                <th>Estadio</th>
+            </tr>
+        </thead>
         <tbody id="cuerpo-tabla"></tbody>
     </table>
 
@@ -160,22 +169,22 @@
         document.getElementById('mensaje-inicial').style.display = 'none';
         tabla.style.display = 'table';
         tbody.innerHTML = '';
-        if (partidos.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No se encontraron partidos.</td></tr>'; return; }
+        if (partidos.length === 0) { tbody.innerHTML = '<tr><td colspan="6">No se encontraron partidos.</td></tr>'; return; }
         partidos.forEach(p => {
             let f = 'Sin fecha';
             if (p.fecha && p.fecha.fecha) {
-                // Forzamos a texto y separamos por el guion
                 const fechaStr = String(p.fecha.fecha); 
                 const partes = fechaStr.split('-');
                 if (partes.length === 3) {
-                    f = `${partes[2]}/${partes[1]}`; // Siempre dará 14/06
+                    f = `${partes[2]}/${partes[1]}`;
                 }
             }
             const h = p.horario ? p.horario.hora.substring(0, 5) : 'Sin hora';
-            tbody.innerHTML += `<tr><td>${f}</td><td>${h}</td><td>${p.local.nombre}</td><td>${p.visitante.nombre}</td><td>${p.sede.nombre}</td></tr>`;
+            const g = p.grupo ? `Grupo ${p.grupo.nombre}` : 'Sin grupo';
+            tbody.innerHTML += `<tr><td>${f}</td><td>${h}</td><td>${g}</td><td>${p.local.nombre}</td><td>${p.visitante.nombre}</td><td>${p.sede.nombre}</td></tr>`;
         });
     }
-    
+
     // ==========================================
     // FUNCIONES DE BÚSQUEDA
     // ==========================================
@@ -186,35 +195,35 @@
         if (!fechaSeleccionada) { document.getElementById('tabla-partidos').style.display = 'none'; document.getElementById('mensaje-inicial').style.display = 'block'; return; }
 
         const tbody = document.getElementById('cuerpo-tabla');
-        tbody.innerHTML = '<tr><td colspan="5">Buscando partidos en la fecha...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">Buscando partidos en la fecha...</td></tr>';
 
         try {
-            // 1. Buscar el ID de la fecha seleccionada en la tabla 'fechas'
             const { data: fechaData, error: errFecha } = await _supabase.from('fechas').select('id').eq('fecha', fechaSeleccionada).single();
             
             if (errFecha || !fechaData) {
-                renderPartidos([]); // Si no existe el día, muestra tabla vacía
+                renderPartidos([]);
                 return;
             }
 
-            // 2. Buscar los partidos con ese fecha_id
             const { data: partidos, error } = await _supabase.from('partidos').select(`
-                id, local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
+                id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
             `).eq('fecha_id', fechaData.id);
 
             if (error) throw error;
             renderPartidos(partidos);
         } catch (error) {
             console.error('Error al buscar por fecha:', error);
-            tbody.innerHTML = `<tr><td colspan="5" style="color:red;">Error al cargar.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="color:red;">Error al cargar.</td></tr>`;
         }
     }
 
     async function cargarPartidosGrupo(idGrupo) {
         document.getElementById('input-busqueda').value = '';
-        document.getElementById('input-fecha').value = ''; // Limpiar fecha
+        document.getElementById('input-fecha').value = '';
         if (!idGrupo) { document.getElementById('tabla-partidos').style.display = 'none'; document.getElementById('mensaje-inicial').style.display = 'block'; return; }
-        const { data, error } = await _supabase.from('partidos').select(`id, local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).eq('grupo_id', idGrupo);
+        const { data, error } = await _supabase.from('partidos').select(`
+            id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
+        `).eq('grupo_id', idGrupo);
         if (!error) renderPartidos(data);
     }
 
@@ -222,18 +231,20 @@
         const searchTerm = document.getElementById('input-busqueda').value.trim();
         if (!searchTerm) return;
         document.getElementById('select-grupo').value = "";
-        document.getElementById('input-fecha').value = ''; // Limpiar fecha
+        document.getElementById('input-fecha').value = '';
         const { data: equipos } = await _supabase.from('selecciones').select('id').ilike('nombre', `%${searchTerm}%`);
         if (equipos.length === 0) { renderPartidos([]); return; }
         const ids = equipos.map(e => e.id);
-        const { data, error } = await _supabase.from('partidos').select(`id, local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)`).or(`seleccion_local_id.in.(${ids.join(',')}),seleccion_visitante_id.in.(${ids.join(',')})`);
+        const { data, error } = await _supabase.from('partidos').select(`
+            id, grupo:grupos (nombre), local:selecciones!seleccion_local_id (nombre), visitante:selecciones!seleccion_visitante_id (nombre), sede:sedes (nombre), fecha:fechas (fecha), horario:horarios (hora)
+        `).or(`seleccion_local_id.in.(${ids.join(',')}),seleccion_visitante_id.in.(${ids.join(',')})`);
         if (!error) renderPartidos(data);
     }
 
     function limpiarFiltros() {
         document.getElementById('input-busqueda').value = '';
         document.getElementById('select-grupo').value = '';
-        document.getElementById('input-fecha').value = ''; // Limpiar fecha
+        document.getElementById('input-fecha').value = '';
         document.getElementById('tabla-partidos').style.display = 'none';
         document.getElementById('mensaje-inicial').style.display = 'block';
     }
